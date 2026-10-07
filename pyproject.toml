@@ -9,6 +9,11 @@ dependencies = ["torch>=2.8", "torchvision>=0.23", "transformers>=5.8.1,<6", "pi
 [project.scripts]
 jean-train = "jean.train:main"
 
+[project.optional-dependencies]
+benchmark = [
+    "decision-index",
+]
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.12"]
 
@@ -18,3 +23,6 @@ build-backend = "uv_build"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.uv.sources]
+decision-index = { git = "https://github.com/apolinario/decision-index.git" }

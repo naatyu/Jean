@@ -194,3 +194,79 @@ def test_choices_continue_after_z() -> None:
     assert len({ids[0] for ids in model.answer_tokens(model.choice_codes)}) == 28
     logits[-1].backward()
     assert model.model.lm_head.weight.grad is not None
+
+
+def test_decision_index_runner_and_resume(tmp_path: Path) -> None:
+    """Exercise the official runner's import, validation, persistence and resume."""
+    import json
+
+    pytest.importorskip("decision_index")
+    from decision_index.runner import run
+
+    model = tiny_model()
+    questions = {
+        "route": {
+            "type": "choice",
+            "instructions": "Which team handles the refund?",
+            "criteria": {"DZ": "Billing", "support": "Support"},
+        },
+        "refund": {"type": "noul", "instructions": "Is a refund requested?"},
+    }
+    path = tmp_path / "requests.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "state": {"message": "Please refund me"},
+                "questions": questions,
+                "_evaluation": {"run_id": "smoke"},
+            }
+        )
+        + "\n"
+    )
+    output = tmp_path / "results"
+    with patch("jean.decision_index.Jean.load", return_value=model):
+        summary = run("jean.decision_index:JeanEngine", {"device": "cpu"}, path, output)
+        assert summary["counts"] == {"ok": 1}
+        assert run("jean.decision_index:JeanEngine", {}, path, output)["counts"] == {}
+    results = (output / "results.jsonl").read_text().splitlines()
+    assert len(results) == 1
+    answers = json.loads(results[0])["response"]["answers"]
+    assert set(answers["route"]["probabilities"]) == {"DZ", "support"}
+    assert answers["refund"]["noul"] == answers["refund"]["probabilities"]["yes"]
+
+
+def test_decision_index_refusals() -> None:
+    """Capacity limits are unsupported; model failures must remain errors."""
+    pytest.importorskip("decision_index")
+    from decision_index.engines import Unsupported
+
+    from jean.decision_index import JeanEngine
+
+    with patch("jean.decision_index.Jean.load", return_value=tiny_model()):
+        engine = JeanEngine(device="cpu")
+    question = {"type": "noul", "instructions": "Is this supported?"}
+    with patch.object(
+        engine.jean,
+        "predict",
+        side_effect=ValueError("Input exceeds 4096 tokens; shorten it explicitly"),
+    ):
+        with pytest.raises(Unsupported, match="4096"):
+            engine("Long input", {"q": question})
+    with patch.object(
+        engine.jean, "predict", side_effect=ValueError("Broken processor")
+    ):
+        with pytest.raises(ValueError, match="Broken processor") as error:
+            engine("Input", {"q": question})
+        assert not isinstance(error.value, Unsupported)
+    with pytest.raises(Unsupported, match="type"):
+        engine("Input", {"q": {"type": "score"}})
+    with pytest.raises(Unsupported, match="choices"):
+        engine(
+            "Input",
+            {
+                "q": {
+                    "type": "choice",
+                    "criteria": {str(i): "Option" for i in range(29)},
+                }
+            },
+        )

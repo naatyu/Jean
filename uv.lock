@@ -135,6 +135,15 @@ nvtx = [
 ]
 
 [[package]]
+name = "decision-index"
+version = "0.3"
+source = { git = "https://github.com/apolinario/decision-index.git#9eb2dbe2a358004c8782c66e40a83ac07b953fec" }
+dependencies = [
+    { name = "httpx" },
+    { name = "huggingface-hub" },
+]
+
+[[package]]
 name = "filelock"
 version = "4.0.12"
 source = { registry = "https://pypi.org/simple" }
@@ -262,6 +271,11 @@ dependencies = [
     { name = "transformers" },
 ]
 
+[package.optional-dependencies]
+benchmark = [
+    { name = "decision-index" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -270,11 +284,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "decision-index", marker = "extra == 'benchmark'", git = "https://github.com/apolinario/decision-index.git" },
     { name = "pillow", specifier = ">=11" },
     { name = "torch", specifier = ">=2.8" },
     { name = "torchvision", specifier = ">=0.23" },
     { name = "transformers", specifier = ">=5.8.1,<6" },
 ]
+provides-extras = ["benchmark"]
 
 [package.metadata.requires-dev]
 dev = [
